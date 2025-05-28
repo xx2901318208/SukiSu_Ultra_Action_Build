@@ -65,7 +65,11 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           sudo apt update
-          sudo apt install -y python3 git curl
+          sudo apt install -y curl bison flex make binutils dwarves git lld pahole zip perl make gcc python3 python-is-python3 bc libssl-dev libelf-dev
+          sudo rm -rf ./llvm.sh
+          sudo wget https://apt.llvm.org/llvm.sh
+          sudo chmod +x llvm.sh
+          sudo sudo ./llvm.sh 20 all
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
           chmod a+x ~/repo
           sudo mv ~/repo /usr/local/bin/repo
@@ -173,11 +177,15 @@ jobs:
             rm -rf ./sched_ext/README.md
             cp -r ./sched_ext/* ./common/kernel/sched
           fi
-          ./build_with_bazel.py -t ${{ github.event.inputs.CPUD }} ${{ github.event.inputs.BUILD_METHOD }}
+          cd common
+          sed -i 's/printf '\''%s'\'' "-\$android_release-\$kmi_generation"/printf '\''%s'\'' "-\$android_release-\$kmi_generation-o"/' scripts/setlocalversion
+          sed -i 's/android_release=/android_release=android14/' scripts/setlocalversion
+          sed -i 's/kmi_generation=/kmi_generation=11/' scripts/setlocalversion
+          make -j$(nproc --all) LLVM=-20 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnuabeihf- CC=clang LD=ld.lld HOSTCC=clang HOSTLD=ld.lld O=out KCFLAGS+=-Wno-error gki_defconfig all
 
       - name: Apply patch_linux and replace Image
         run: |
-          cd kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.BUILD_METHOD }}/dist
+          cd kernel_workspace/kernel_platform/common/out/arch/arm64/boot
           curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux
           chmod +x patch_linux
           ./patch_linux
@@ -188,7 +196,7 @@ jobs:
         run: |
           git clone https://github.com/Numbersf/AnyKernel3.git --depth=1
           rm -rf ./AnyKernel3/.git
-          cp kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.BUILD_METHOD }}/dist/Image ./AnyKernel3/Image
+          cp kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3/Image
           if [ ! -f ./AnyKernel3/Image ]; then
             echo "未找到内核镜像文件，构建可能出错"
             exit 1
